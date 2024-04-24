@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, repo *repository.DB) error {
+func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *repository.DB) error {
 	lg.Info("gRPC server start...", zap.String("address", host))
 
 	tlsCredentials, err := loadTLSCredentials()
@@ -68,8 +68,9 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, repo *repository.
 
 	storageSvc := services.NewStorageService(repo)
 	proto.RegisterStorageServer(s, &handler.StorageHandler{
-		Svc:    *storageSvc,
-		Logger: lg,
+		Svc:       *storageSvc,
+		Logger:    lg,
+		MasterKey: mk,
 	})
 
 	// Graceful server

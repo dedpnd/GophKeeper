@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -9,14 +10,18 @@ import (
 )
 
 type ConfigENV struct {
-	JWTkey string `json:"jwt_key" env:"JWT_KEY"`
-	Host   string `json:"host" env:"HOST"`
-	DSN    string `json:"dsn" env:"DSN"`
+	JWTkey    string `json:"jwt_key" env:"JWT_KEY"`
+	Host      string `json:"host" env:"HOST"`
+	DSN       string `json:"dsn" env:"DSN"`
+	MasterKey string
 }
 
 func GetConfig() (*ConfigENV, error) {
 	var eCfg ConfigENV
 	configPath := "config/server.json"
+
+	flag.StringVar(&eCfg.MasterKey, "mk", "", "master key for encryption keys")
+	flag.Parse()
 
 	file, err := os.Open(configPath)
 	if err != nil {

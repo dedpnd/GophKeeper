@@ -148,7 +148,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Storage_ReadRecord_FullMethodName = "/proto.Storage/ReadRecord"
+	Storage_ReadRecord_FullMethodName    = "/proto.Storage/ReadRecord"
+	Storage_ReadAllRecord_FullMethodName = "/proto.Storage/ReadAllRecord"
+	Storage_WriteRecord_FullMethodName   = "/proto.Storage/WriteRecord"
+	Storage_DeleteRecord_FullMethodName  = "/proto.Storage/DeleteRecord"
 )
 
 // StorageClient is the client API for Storage service.
@@ -156,6 +159,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StorageClient interface {
 	ReadRecord(ctx context.Context, in *ReadRecordRequest, opts ...grpc.CallOption) (*ReadRecordResponse, error)
+	ReadAllRecord(ctx context.Context, in *ReadAllRecordRequest, opts ...grpc.CallOption) (*ReadAllRecordResponse, error)
+	WriteRecord(ctx context.Context, in *WriteRecordRequest, opts ...grpc.CallOption) (*WriteRecordResponse, error)
+	DeleteRecord(ctx context.Context, in *DeleteRecordRequest, opts ...grpc.CallOption) (*DeleteRecordResponse, error)
 }
 
 type storageClient struct {
@@ -175,11 +181,41 @@ func (c *storageClient) ReadRecord(ctx context.Context, in *ReadRecordRequest, o
 	return out, nil
 }
 
+func (c *storageClient) ReadAllRecord(ctx context.Context, in *ReadAllRecordRequest, opts ...grpc.CallOption) (*ReadAllRecordResponse, error) {
+	out := new(ReadAllRecordResponse)
+	err := c.cc.Invoke(ctx, Storage_ReadAllRecord_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageClient) WriteRecord(ctx context.Context, in *WriteRecordRequest, opts ...grpc.CallOption) (*WriteRecordResponse, error) {
+	out := new(WriteRecordResponse)
+	err := c.cc.Invoke(ctx, Storage_WriteRecord_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageClient) DeleteRecord(ctx context.Context, in *DeleteRecordRequest, opts ...grpc.CallOption) (*DeleteRecordResponse, error) {
+	out := new(DeleteRecordResponse)
+	err := c.cc.Invoke(ctx, Storage_DeleteRecord_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StorageServer is the server API for Storage service.
 // All implementations must embed UnimplementedStorageServer
 // for forward compatibility
 type StorageServer interface {
 	ReadRecord(context.Context, *ReadRecordRequest) (*ReadRecordResponse, error)
+	ReadAllRecord(context.Context, *ReadAllRecordRequest) (*ReadAllRecordResponse, error)
+	WriteRecord(context.Context, *WriteRecordRequest) (*WriteRecordResponse, error)
+	DeleteRecord(context.Context, *DeleteRecordRequest) (*DeleteRecordResponse, error)
 	mustEmbedUnimplementedStorageServer()
 }
 
@@ -189,6 +225,15 @@ type UnimplementedStorageServer struct {
 
 func (UnimplementedStorageServer) ReadRecord(context.Context, *ReadRecordRequest) (*ReadRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadRecord not implemented")
+}
+func (UnimplementedStorageServer) ReadAllRecord(context.Context, *ReadAllRecordRequest) (*ReadAllRecordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadAllRecord not implemented")
+}
+func (UnimplementedStorageServer) WriteRecord(context.Context, *WriteRecordRequest) (*WriteRecordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WriteRecord not implemented")
+}
+func (UnimplementedStorageServer) DeleteRecord(context.Context, *DeleteRecordRequest) (*DeleteRecordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteRecord not implemented")
 }
 func (UnimplementedStorageServer) mustEmbedUnimplementedStorageServer() {}
 
@@ -221,6 +266,60 @@ func _Storage_ReadRecord_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Storage_ReadAllRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadAllRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServer).ReadAllRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Storage_ReadAllRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServer).ReadAllRecord(ctx, req.(*ReadAllRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Storage_WriteRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServer).WriteRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Storage_WriteRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServer).WriteRecord(ctx, req.(*WriteRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Storage_DeleteRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServer).DeleteRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Storage_DeleteRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServer).DeleteRecord(ctx, req.(*DeleteRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Storage_ServiceDesc is the grpc.ServiceDesc for Storage service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -231,6 +330,18 @@ var Storage_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadRecord",
 			Handler:    _Storage_ReadRecord_Handler,
+		},
+		{
+			MethodName: "ReadAllRecord",
+			Handler:    _Storage_ReadAllRecord_Handler,
+		},
+		{
+			MethodName: "WriteRecord",
+			Handler:    _Storage_WriteRecord_Handler,
+		},
+		{
+			MethodName: "DeleteRecord",
+			Handler:    _Storage_DeleteRecord_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

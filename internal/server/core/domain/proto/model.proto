@@ -31,15 +31,50 @@ service User {
   rpc Login (LoginRequest) returns (LoginResponse);
 }
 
+message StorageUnit {
+  int32 id = 1;
+  string name = 2;
+  string value = 3;
+  int32 owner = 4;
+}
+
 message ReadRecordRequest {
   int32 id = 1;
 }
 
 message ReadRecordResponse {
-  int32 id = 1;  
-  string error = 3;
+  StorageUnit unit = 1;
+  string error = 2;
+}
+
+message ReadAllRecordRequest{
+
+}
+
+message ReadAllRecordResponse {
+  repeated StorageUnit units = 1;
+  string error = 2;
+}
+
+message WriteRecordRequest {
+  StorageUnit unit = 1;
+}
+
+message WriteRecordResponse {
+  string error = 1;
+}
+
+message DeleteRecordRequest {
+  int32 id = 1;
+}
+
+message DeleteRecordResponse {
+  string error = 1;
 }
 
 service Storage {
   rpc ReadRecord(ReadRecordRequest) returns (ReadRecordResponse);
+  rpc ReadAllRecord(ReadAllRecordRequest) returns (ReadAllRecordResponse);
+  rpc WriteRecord(WriteRecordRequest) returns (WriteRecordResponse);
+  rpc DeleteRecord(DeleteRecordRequest) returns (DeleteRecordResponse);
 }

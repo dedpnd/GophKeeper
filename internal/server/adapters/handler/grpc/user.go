@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dedpnd/GophKeeper/internal/server/adapters/middleware"
 	"github.com/dedpnd/GophKeeper/internal/server/core/domain/proto"
 	"github.com/dedpnd/GophKeeper/internal/server/core/services"
 	"github.com/golang-jwt/jwt/v5"
@@ -20,12 +21,6 @@ type UserHandler struct {
 	Svc    services.UserService
 	Logger *zap.Logger
 	JWTkey string
-}
-
-type Claims struct {
-	ID    int    `json:"id"`
-	Login string `json:"login"`
-	jwt.RegisteredClaims
 }
 
 func (h UserHandler) Register(ctx context.Context, in *proto.RegiserRequest) (*proto.RegisterResponse, error) {
@@ -103,7 +98,7 @@ func getJWT(jwtKey string, id int, login string) (*string, error) {
 	var DefaultSession = 30
 	var DefaultExpTime = time.Now().Add(time.Duration(DefaultSession) * time.Minute)
 
-	claims := &Claims{
+	claims := &middleware.JWTclaims{
 		ID:    id,
 		Login: login,
 		RegisteredClaims: jwt.RegisteredClaims{

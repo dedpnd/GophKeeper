@@ -8,5 +8,8 @@ type UserRepository interface {
 }
 
 type StorageRepository interface {
-	ReadRecord(id int) (*domain.Storage, error)
+	ReadRecord(id int, owner int) (*domain.Storage, error)
+	ReadAllRecord(owner int) ([]*domain.Storage, error)
+	WriteRecord(doc domain.Storage) error
+	DeleteRecord(id int, owner int) error
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dedpnd/GophKeeper/internal/server/adapters/middleware"
 	"github.com/dedpnd/GophKeeper/internal/server/core/domain/proto"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors"
@@ -20,11 +21,14 @@ func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context,
 			return nil, err
 		}
 
-		if !verifyJWT(jwtKey, token) {
+		pl, isAuth := verifyJWTandGetPayload(jwtKey, token)
+		if !isAuth {
 			return nil, status.Error(codes.Unauthenticated, "invalid auth token")
 		}
 
-		return ctx, nil
+		enCtx := middleware.SetTokenToContext(ctx, pl)
+
+		return enCtx, nil
 	}
 }
 
@@ -32,24 +36,26 @@ func AuthMatcher(ctx context.Context, callMeta interceptors.CallMeta) bool {
 	return proto.User_ServiceDesc.ServiceName != callMeta.Service
 }
 
-func verifyJWT(jwtKey string, token string) bool {
-	tkn, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, bool) {
+	claims := &middleware.JWTclaims{}
+
+	tkn, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtKey), nil
 	})
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrSignatureInvalid) {
 			fmt.Printf("failed signature from jwt: %s", err)
-			return false
+			return *claims, false
 		}
 		fmt.Printf("invalid jwt token: %s", err)
-		return false
+		return *claims, false
 	}
 
 	if !tkn.Valid {
 		fmt.Printf("jwt token not valid: %s", err)
-		return false
+		return *claims, false
 	}
 
-	return true
+	return *claims, true
 }

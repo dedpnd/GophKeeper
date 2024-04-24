@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dedpnd/GophKeeper/internal/server/core/domain/proto"
@@ -96,8 +97,59 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 		client := proto.NewStorageClient(conn)
-		resp, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
-			Id: 1,
+		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
+
+		if err != nil {
+			return fmt.Errorf("response finished error: %s", err)
+		}
+		if respAR.Error != "" {
+			return fmt.Errorf("response return error: %s", respAR.Error)
+		}
+
+		if len(respAR.Units) == 0 {
+			fmt.Println("Not found files. Bye!")
+			return nil
+		}
+
+		fmt.Println("Available files:")
+		for _, v := range respAR.Units {
+			// TODO: Откуда 0 ? Size slice ?
+			if v.Id > 0 {
+				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
+			}
+		}
+
+		i, err := chooseFile()
+		if err != nil {
+			return fmt.Errorf("wrong id file: %s", err)
+		}
+
+		respRR, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
+			Id: int32(i),
+		})
+
+		if err != nil {
+			return fmt.Errorf("response finished error: %s", err)
+		}
+		if respRR.Error != "" {
+			return fmt.Errorf("response return error: %s", respRR.Error)
+		}
+
+		fmt.Println(respRR.Unit)
+	case "write-file":
+		fmt.Println("-> Write file")
+
+		md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", token))
+		ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+		client := proto.NewStorageClient(conn)
+
+		// TODO: Выбор разного типа сохранения
+		resp, err := client.WriteRecord(ctx, &proto.WriteRecordRequest{
+			Unit: &proto.StorageUnit{
+				Name:  "test",
+				Value: "test",
+			},
 		})
 
 		if err != nil {
@@ -108,7 +160,54 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 			return fmt.Errorf("response return error: %s", resp.Error)
 		}
 
-		lg.Info("RESPONSE", zap.Int32("ID", resp.Id))
+		fmt.Println("File write!")
+	case "delete-file":
+		fmt.Println("-> Delete file")
+
+		md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", token))
+		ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+		client := proto.NewStorageClient(conn)
+		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
+
+		if err != nil {
+			return fmt.Errorf("response finished error: %s", err)
+		}
+		if respAR.Error != "" {
+			return fmt.Errorf("response return error: %s", respAR.Error)
+		}
+
+		if len(respAR.Units) == 0 {
+			fmt.Println("Not found files. Bye!")
+			return nil
+		}
+
+		fmt.Println("Available files:")
+		for _, v := range respAR.Units {
+			// TODO: Откуда 0 ? Size slice ?
+			if v.Id > 0 {
+				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
+			}
+		}
+
+		i, err := chooseFile()
+		if err != nil {
+			return fmt.Errorf("wrong id file: %s", err)
+		}
+
+		respDR, err := client.DeleteRecord(ctx, &proto.DeleteRecordRequest{
+			Id: int32(i),
+		})
+
+		if err != nil {
+			return fmt.Errorf("response finished error: %s", err)
+		}
+
+		if respDR.Error != "" {
+			return fmt.Errorf("response return error: %s", respDR.Error)
+		}
+
+		fmt.Println("File delete!")
 	default:
 		fmt.Printf("Command:%s not found! \n", command)
 	}
@@ -138,6 +237,29 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 }
 
 /* !UTILS! */
+
+func chooseFile() (int, error) {
+	fmt.Print("Select ID file: ")
+
+	// Создайте считыватель для ввода из стандартного ввода (консоли)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Считайте ответ пользователя
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return 0, fmt.Errorf("failed read stdin: %w", err)
+	}
+
+	// Обрежьте пробелы и символы новой строки из ответа
+	response = strings.TrimSpace(response)
+
+	i, err := strconv.Atoi(response)
+	if err != nil {
+		return 0, fmt.Errorf("failed parse int: %w", err)
+	}
+
+	return i, nil
+}
 
 func saveAuthToken(token string) error {
 	fmt.Print("Do you want save token in .env? [y/N]: ")

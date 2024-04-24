@@ -35,6 +35,10 @@ func main() {
 		fmt.Println("Support command -c:")
 		fmt.Println("sign-up - create new account")
 		fmt.Println("sign-in - sign in with your account")
+		fmt.Println("read-file - read all files on your account")
+		fmt.Println("write-file - write file on your account")
+		fmt.Println("delete-file - delete file from your account")
+		fmt.Println("*************************************")
 	}
 
 	err = core.NewClient(lg, eCfg.ServerAddr, eCfg.JWT, eCfg.Command)

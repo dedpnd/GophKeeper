@@ -30,12 +30,20 @@ func main() {
 	lg.Info(fmt.Sprintf("Build version: %v", buildVersion))
 	lg.Info(fmt.Sprintf("Build date: %v", buildDate))
 
+	if eCfg.MasterKey == "" {
+		lg.Fatal("Master key not found! Please use flag -mk")
+	}
+
+	if len(eCfg.MasterKey) < 16 {
+		lg.Fatal("Minimum length master key 16 characters!")
+	}
+
 	repo, err := repository.NewDB(context.Background(), lg, eCfg.DSN)
 	if err != nil {
 		lg.Fatal(err.Error())
 	}
 
-	err = core.RunGRPCserver(lg, eCfg.Host, eCfg.JWTkey, repo)
+	err = core.RunGRPCserver(lg, eCfg.Host, eCfg.JWTkey, eCfg.MasterKey, repo)
 	if err != nil {
 		lg.Fatal(err.Error())
 	}
