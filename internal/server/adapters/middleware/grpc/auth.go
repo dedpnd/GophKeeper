@@ -18,12 +18,12 @@ func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context,
 	return func(ctx context.Context) (context.Context, error) {
 		token, err := auth.AuthFromMD(ctx, "bearer")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("AuthFromMD has error: %w", err)
 		}
 
-		pl, isAuth := verifyJWTandGetPayload(jwtKey, token)
-		if !isAuth {
-			return nil, status.Error(codes.Unauthenticated, "invalid auth token")
+		pl, err := verifyJWTandGetPayload(jwtKey, token)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		enCtx := middleware.SetTokenToContext(ctx, pl)
@@ -36,7 +36,7 @@ func AuthMatcher(ctx context.Context, callMeta interceptors.CallMeta) bool {
 	return proto.User_ServiceDesc.ServiceName != callMeta.Service
 }
 
-func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, bool) {
+func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, error) {
 	claims := &middleware.JWTclaims{}
 
 	tkn, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
@@ -45,17 +45,14 @@ func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, 
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrSignatureInvalid) {
-			fmt.Printf("failed signature from jwt: %s", err)
-			return *claims, false
+			return *claims, fmt.Errorf("failed signature from jwt: %w", err)
 		}
-		fmt.Printf("invalid jwt token: %s", err)
-		return *claims, false
+		return *claims, fmt.Errorf("invalid jwt token: %w", err)
 	}
 
 	if !tkn.Valid {
-		fmt.Printf("jwt token not valid: %s", err)
-		return *claims, false
+		return *claims, fmt.Errorf("jwt token not valid: %w", err)
 	}
 
-	return *claims, true
+	return *claims, nil
 }

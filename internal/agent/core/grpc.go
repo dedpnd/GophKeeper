@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -17,13 +18,19 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+var maxMsgSize = 100000648
+
 func NewClient(lg *zap.Logger, addr string, token string, command string) error {
 	tlsCredentials, err := loadTLSCredentials()
 	if err != nil {
 		return fmt.Errorf("cannot load TLS credentials: %s", err)
 	}
 
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(tlsCredentials))
+	conn, err := grpc.Dial(
+		addr,
+		grpc.WithTransportCredentials(tlsCredentials),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+	)
 	if err != nil {
 		return fmt.Errorf("failed start grpc server: %s", err)
 	}
@@ -119,7 +126,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 			}
 		}
 
-		i, err := chooseFile()
+		i, err := selectReadFile()
 		if err != nil {
 			return fmt.Errorf("wrong id file: %s", err)
 		}
@@ -135,7 +142,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 			return fmt.Errorf("response return error: %s", respRR.Error)
 		}
 
-		fmt.Println(respRR.Unit)
+		fmt.Println(string(respRR.Data))
 	case "write-file":
 		fmt.Println("-> Write file")
 
@@ -144,23 +151,15 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 
 		client := proto.NewStorageClient(conn)
 
-		// TODO: Выбор разного типа сохранения
-		resp, err := client.WriteRecord(ctx, &proto.WriteRecordRequest{
-			Unit: &proto.StorageUnit{
-				Name:  "test",
-				Value: "test",
-			},
-		})
-
+		stream, err := client.WriteRecord(ctx)
 		if err != nil {
 			return fmt.Errorf("response finished error: %s", err)
 		}
 
-		if resp.Error != "" {
-			return fmt.Errorf("response return error: %s", resp.Error)
+		err = selectWriteData(stream)
+		if err != nil {
+			return fmt.Errorf("select write data error: %s", err)
 		}
-
-		fmt.Println("File write!")
 	case "delete-file":
 		fmt.Println("-> Delete file")
 
@@ -190,7 +189,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 			}
 		}
 
-		i, err := chooseFile()
+		i, err := selectReadFile()
 		if err != nil {
 			return fmt.Errorf("wrong id file: %s", err)
 		}
@@ -238,7 +237,148 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 
 /* !UTILS! */
 
-func chooseFile() (int, error) {
+func selectWriteData(stream proto.Storage_WriteRecordClient) error {
+	fmt.Println("What you want send on server?")
+	fmt.Println("[1] - Text")
+	fmt.Println("[2] - File")
+	fmt.Print("Enter a number: ")
+
+	// Создайте считыватель для ввода из стандартного ввода (консоли)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Считайте ответ пользователя
+	r, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed read stdin: %w", err)
+	}
+
+	// Обрежьте пробелы и символы новой строки из ответа
+	r = strings.TrimSpace(r)
+
+	i, err := strconv.Atoi(r)
+	if err != nil {
+		return fmt.Errorf("failed parse int: %w", err)
+	}
+
+	switch i {
+	case 1:
+		// TODO: Выбрать тип и сделать сохранение в зависимости от него
+		fmt.Println("What do you want to save?")
+		fmt.Println("[1] - Custom text")
+		fmt.Println("[2] - Login | Password")
+		fmt.Println("[3] - Credit card")
+		fmt.Print("Enter a number: ")
+
+		r, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed read stdin: %w", err)
+		}
+
+		r = strings.TrimSpace(r)
+
+		i, err := strconv.Atoi(r)
+		if err != nil {
+			return fmt.Errorf("failed parse int: %w", err)
+		}
+
+		fmt.Print("Enter name: ")
+
+		fileName, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed read stdin: %w", err)
+		}
+
+		fileName = strings.TrimSpace(fileName)
+
+		switch i {
+		case 1:
+			fmt.Println("Enter text:")
+		case 2:
+			fmt.Println("Enter loggin and password:")
+		case 3:
+			fmt.Println("Enter number, name, date and CVV:")
+		}
+
+		data, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed read stdin: %w", err)
+		}
+
+		data = strings.TrimSpace(data)
+
+		// Отправьте данные по gRPC
+		err = stream.Send(&proto.WriteRecordRequest{Name: fileName, Data: []byte(data), Type: "text"})
+		if err != nil {
+			return fmt.Errorf("stream send has error: %s", err)
+		}
+
+		// Закройте поток и получите ответ
+		res, err := stream.CloseAndRecv()
+		if err != nil {
+			return fmt.Errorf("closed stream has error: %s", err)
+		}
+		if res.Error != "" {
+			return fmt.Errorf("response return error: %s", res.Error)
+		}
+	case 2:
+		fmt.Print("Enter the link to the file: ")
+
+		// Считайте ответ пользователя
+		filePath, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed read stdin: %w", err)
+		}
+
+		filePath = strings.TrimSpace(filePath)
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("failed open file: %w", err)
+		}
+		defer file.Close()
+
+		fi, err := file.Stat()
+		if err != nil {
+			return fmt.Errorf("failed read stat file: %w", err)
+		}
+
+		if fi.Size() > int64(maxMsgSize) {
+			return fmt.Errorf("maximum file size should be less: %v bytes", maxMsgSize)
+		}
+
+		// Прочитать файл кусками и отправить
+		buf := make([]byte, 4096)
+		for {
+			n, err := file.Read(buf)
+			if err == io.EOF {
+				// Конец файла, закройте поток
+				res, err := stream.CloseAndRecv()
+				if err != nil {
+					return fmt.Errorf("failed CloseAndRecv: %w", err)
+				}
+				if res.Error != "" {
+					return fmt.Errorf("response return error: %s", res.Error)
+				}
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("failed read file: %w", err)
+			}
+
+			// Отправьте кусок данных
+			err = stream.Send(&proto.WriteRecordRequest{Name: file.Name(), Data: buf[:n], Type: "file"})
+			if err != nil {
+				return fmt.Errorf("failed send stream: %w", err)
+			}
+		}
+	}
+
+	fmt.Println("File write!")
+
+	return nil
+}
+
+func selectReadFile() (int, error) {
 	fmt.Print("Select ID file: ")
 
 	// Создайте считыватель для ввода из стандартного ввода (консоли)

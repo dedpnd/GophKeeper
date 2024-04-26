@@ -34,8 +34,9 @@ service User {
 message StorageUnit {
   int32 id = 1;
   string name = 2;
-  string value = 3;
-  int32 owner = 4;
+  string type = 3;
+  string value = 4;
+  int32 owner = 5;
 }
 
 message ReadRecordRequest {
@@ -43,8 +44,9 @@ message ReadRecordRequest {
 }
 
 message ReadRecordResponse {
-  StorageUnit unit = 1;
-  string error = 2;
+  bytes data = 1;
+  string type = 2;
+  string error = 3;
 }
 
 message ReadAllRecordRequest{
@@ -57,7 +59,9 @@ message ReadAllRecordResponse {
 }
 
 message WriteRecordRequest {
-  StorageUnit unit = 1;
+  string name = 1;
+  string type = 2;
+  bytes data = 3;
 }
 
 message WriteRecordResponse {
@@ -75,6 +79,6 @@ message DeleteRecordResponse {
 service Storage {
   rpc ReadRecord(ReadRecordRequest) returns (ReadRecordResponse);
   rpc ReadAllRecord(ReadAllRecordRequest) returns (ReadAllRecordResponse);
-  rpc WriteRecord(WriteRecordRequest) returns (WriteRecordResponse);
+  rpc WriteRecord(stream WriteRecordRequest) returns (WriteRecordResponse);
   rpc DeleteRecord(DeleteRecordRequest) returns (DeleteRecordResponse);
 }

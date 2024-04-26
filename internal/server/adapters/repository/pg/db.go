@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type DB struct {
@@ -17,7 +18,9 @@ type DB struct {
 func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
-	}), &gorm.Config{})
+	}), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		return &DB{}, fmt.Errorf("failed init db session: %w", err)
 	}

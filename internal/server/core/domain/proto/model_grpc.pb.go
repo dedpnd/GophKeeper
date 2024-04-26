@@ -160,7 +160,7 @@ const (
 type StorageClient interface {
 	ReadRecord(ctx context.Context, in *ReadRecordRequest, opts ...grpc.CallOption) (*ReadRecordResponse, error)
 	ReadAllRecord(ctx context.Context, in *ReadAllRecordRequest, opts ...grpc.CallOption) (*ReadAllRecordResponse, error)
-	WriteRecord(ctx context.Context, in *WriteRecordRequest, opts ...grpc.CallOption) (*WriteRecordResponse, error)
+	WriteRecord(ctx context.Context, opts ...grpc.CallOption) (Storage_WriteRecordClient, error)
 	DeleteRecord(ctx context.Context, in *DeleteRecordRequest, opts ...grpc.CallOption) (*DeleteRecordResponse, error)
 }
 
@@ -190,13 +190,38 @@ func (c *storageClient) ReadAllRecord(ctx context.Context, in *ReadAllRecordRequ
 	return out, nil
 }
 
-func (c *storageClient) WriteRecord(ctx context.Context, in *WriteRecordRequest, opts ...grpc.CallOption) (*WriteRecordResponse, error) {
-	out := new(WriteRecordResponse)
-	err := c.cc.Invoke(ctx, Storage_WriteRecord_FullMethodName, in, out, opts...)
+func (c *storageClient) WriteRecord(ctx context.Context, opts ...grpc.CallOption) (Storage_WriteRecordClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Storage_ServiceDesc.Streams[0], Storage_WriteRecord_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &storageWriteRecordClient{stream}
+	return x, nil
+}
+
+type Storage_WriteRecordClient interface {
+	Send(*WriteRecordRequest) error
+	CloseAndRecv() (*WriteRecordResponse, error)
+	grpc.ClientStream
+}
+
+type storageWriteRecordClient struct {
+	grpc.ClientStream
+}
+
+func (x *storageWriteRecordClient) Send(m *WriteRecordRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *storageWriteRecordClient) CloseAndRecv() (*WriteRecordResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(WriteRecordResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *storageClient) DeleteRecord(ctx context.Context, in *DeleteRecordRequest, opts ...grpc.CallOption) (*DeleteRecordResponse, error) {
@@ -214,7 +239,7 @@ func (c *storageClient) DeleteRecord(ctx context.Context, in *DeleteRecordReques
 type StorageServer interface {
 	ReadRecord(context.Context, *ReadRecordRequest) (*ReadRecordResponse, error)
 	ReadAllRecord(context.Context, *ReadAllRecordRequest) (*ReadAllRecordResponse, error)
-	WriteRecord(context.Context, *WriteRecordRequest) (*WriteRecordResponse, error)
+	WriteRecord(Storage_WriteRecordServer) error
 	DeleteRecord(context.Context, *DeleteRecordRequest) (*DeleteRecordResponse, error)
 	mustEmbedUnimplementedStorageServer()
 }
@@ -229,8 +254,8 @@ func (UnimplementedStorageServer) ReadRecord(context.Context, *ReadRecordRequest
 func (UnimplementedStorageServer) ReadAllRecord(context.Context, *ReadAllRecordRequest) (*ReadAllRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadAllRecord not implemented")
 }
-func (UnimplementedStorageServer) WriteRecord(context.Context, *WriteRecordRequest) (*WriteRecordResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WriteRecord not implemented")
+func (UnimplementedStorageServer) WriteRecord(Storage_WriteRecordServer) error {
+	return status.Errorf(codes.Unimplemented, "method WriteRecord not implemented")
 }
 func (UnimplementedStorageServer) DeleteRecord(context.Context, *DeleteRecordRequest) (*DeleteRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteRecord not implemented")
@@ -284,22 +309,30 @@ func _Storage_ReadAllRecord_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Storage_WriteRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WriteRecordRequest)
-	if err := dec(in); err != nil {
+func _Storage_WriteRecord_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StorageServer).WriteRecord(&storageWriteRecordServer{stream})
+}
+
+type Storage_WriteRecordServer interface {
+	SendAndClose(*WriteRecordResponse) error
+	Recv() (*WriteRecordRequest, error)
+	grpc.ServerStream
+}
+
+type storageWriteRecordServer struct {
+	grpc.ServerStream
+}
+
+func (x *storageWriteRecordServer) SendAndClose(m *WriteRecordResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *storageWriteRecordServer) Recv() (*WriteRecordRequest, error) {
+	m := new(WriteRecordRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(StorageServer).WriteRecord(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Storage_WriteRecord_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StorageServer).WriteRecord(ctx, req.(*WriteRecordRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 func _Storage_DeleteRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -336,14 +369,16 @@ var Storage_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Storage_ReadAllRecord_Handler,
 		},
 		{
-			MethodName: "WriteRecord",
-			Handler:    _Storage_WriteRecord_Handler,
-		},
-		{
 			MethodName: "DeleteRecord",
 			Handler:    _Storage_DeleteRecord_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WriteRecord",
+			Handler:       _Storage_WriteRecord_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "internal/server/core/domain/proto/model.proto",
 }

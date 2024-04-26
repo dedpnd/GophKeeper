@@ -26,11 +26,13 @@ import (
 func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *repository.DB) error {
 	lg.Info("gRPC server start...", zap.String("address", host))
 
+	// Load certificates
 	tlsCredentials, err := loadTLSCredentials()
 	if err != nil {
 		return fmt.Errorf("failed load tls: %w", err)
 	}
 
+	// Listen port
 	listen, err := net.Listen("tcp", host)
 	if err != nil {
 		return fmt.Errorf("failde listen grpc port: %w", err)
@@ -38,9 +40,9 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 
 	opts := []logging.Option{
 		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
-		// Add any other option (check functions starting with logging.With).
 	}
 
+	// Create gRPC server
 	s := grpc.NewServer(
 		grpc.Creds(tlsCredentials),
 		grpc.ChainUnaryInterceptor(
@@ -59,6 +61,7 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 		),
 	)
 
+	// Create user service
 	userSvc := services.NewUserService(repo)
 	proto.RegisterUserServer(s, &handler.UserHandler{
 		Svc:    *userSvc,
@@ -66,6 +69,7 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 		JWTkey: jwtKey,
 	})
 
+	// Create storage service
 	storageSvc := services.NewStorageService(repo)
 	proto.RegisterStorageServer(s, &handler.StorageHandler{
 		Svc:       *storageSvc,
