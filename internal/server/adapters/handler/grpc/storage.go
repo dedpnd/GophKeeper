@@ -102,6 +102,7 @@ func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequ
 func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) error {
 	var resp proto.WriteRecordResponse
 	var fileName string
+	var fileType string
 
 	// For chunk
 	buffer := &bytes.Buffer{}
@@ -130,6 +131,10 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 			fileName = chunk.GetName()
 		}
 
+		if fileType == "" {
+			fileType = chunk.GetType()
+		}
+
 		// Write the data to the buffer
 		if _, err := buffer.Write(chunk.GetData()); err != nil {
 			s.Logger.With(zap.Error(err)).Error("failed write chunk to buffer")
@@ -149,6 +154,7 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 	// Prepare record for save
 	var unit = domain.Storage{
 		Name:  fileName,
+		Type:  fileType,
 		Value: data,
 		Key:   key,
 		Owner: token.ID,
