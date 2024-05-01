@@ -1,3 +1,4 @@
+// Package handler contains gRPC handlers that implement the server-side logic for the application.
 package handler
 
 import (
@@ -16,6 +17,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// UserHandler is a gRPC handler that implements the `UserServer` interface
+// defined in the `proto` package. It handles gRPC calls related to user
+// operations such as registration and login. The handler relies on the
+// `UserService` for the business logic and uses a `zap.Logger` for logging.
+// It also uses a JWT key (`JWTkey`) for creating JWT tokens during user
+// registration and login.
 type UserHandler struct {
 	proto.UnimplementedUserServer
 	Svc    services.UserService
@@ -23,6 +30,11 @@ type UserHandler struct {
 	JWTkey string
 }
 
+// Register handles the user registration gRPC call. It creates a new user
+// with the provided login and hashed password using the `UserService`.
+// If registration is successful, it generates a JWT token for the user.
+// Errors during registration or token generation are logged and returned
+// as error responses.
 func (h UserHandler) Register(ctx context.Context, in *proto.RegiserRequest) (*proto.RegisterResponse, error) {
 	var res proto.RegisterResponse
 
@@ -63,6 +75,10 @@ func (h UserHandler) Register(ctx context.Context, in *proto.RegiserRequest) (*p
 	return &res, nil
 }
 
+// Login handles the user login gRPC call. It verifies the user's credentials
+// using the `UserService`. If the credentials are valid, it generates a JWT token
+// for the user. Errors during login verification or token generation are logged
+// and returned as error responses.
 func (h UserHandler) Login(ctx context.Context, in *proto.LoginRequest) (*proto.LoginResponse, error) {
 	var res proto.LoginResponse
 	user, err := h.Svc.FindUserByLogin(in.Login)
@@ -96,6 +112,9 @@ func (h UserHandler) Login(ctx context.Context, in *proto.LoginRequest) (*proto.
 	return &res, nil
 }
 
+// getJWT generates a JWT token for the specified user ID and login using the
+// provided JWT key. The token includes the user's ID, login, and expiration
+// time (defaulting to 30 minutes). If token generation fails, it returns an error.
 func getJWT(jwtKey string, id int, login string) (*string, error) {
 	var DefaultSession = 30
 	var DefaultExpTime = time.Now().Add(time.Duration(DefaultSession) * time.Minute)

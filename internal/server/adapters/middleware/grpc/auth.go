@@ -1,3 +1,4 @@
+// Package middleware provides various middlewares for the server.
 package middleware
 
 import (
@@ -14,6 +15,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// GetAuthenticator returns a function for authenticating gRPC requests using JWT tokens.
+// It uses the `AuthFromMD` function to extract the token from the metadata and verifies
+// the token using `verifyJWTandGetPayload`. If the token is valid, it sets the token's
+// claims in the context and returns the enhanced context. If an error occurs, it returns
+// an unauthenticated error.
 func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context, error) {
 	return func(ctx context.Context) (context.Context, error) {
 		token, err := auth.AuthFromMD(ctx, "bearer")
@@ -33,10 +39,17 @@ func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context,
 	}
 }
 
+// AuthMatcher is a function that determines whether a given gRPC call should
+// require authentication. It returns `true` if the service name does not match
+// the `User_ServiceDesc.ServiceName`, indicating that authentication is required.
 func AuthMatcher(ctx context.Context, callMeta interceptors.CallMeta) bool {
 	return proto.User_ServiceDesc.ServiceName != callMeta.Service
 }
 
+// verifyJWTandGetPayload verifies a JWT token and returns its claims as `JWTclaims`.
+// It uses the provided `jwtKey` to parse and validate the token. If the token
+// is valid, it returns the claims. If an error occurs during parsing or verification,
+// it returns the error.
 func verifyJWTandGetPayload(jwtKey string, token string) (middleware.JWTclaims, error) {
 	claims := &middleware.JWTclaims{}
 

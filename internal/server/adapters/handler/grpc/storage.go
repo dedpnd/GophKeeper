@@ -1,3 +1,4 @@
+// Package handler contains gRPC handlers that implement the server-side logic for the application.
 package handler
 
 import (

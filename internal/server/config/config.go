@@ -1,3 +1,4 @@
+// Package config gets settings from environment variables or command line arguments.
 package config
 
 import (
@@ -9,6 +10,7 @@ import (
 	env "github.com/caarlos0/env/v6"
 )
 
+// ConfigENV contains app settings.
 type ConfigENV struct {
 	JWTkey    string `json:"jwt_key" env:"JWT_KEY"`
 	Host      string `json:"host" env:"HOST"`
@@ -16,6 +18,7 @@ type ConfigENV struct {
 	MasterKey string
 }
 
+// GetConfig get app settings.
 func GetConfig() (*ConfigENV, error) {
 	var eCfg ConfigENV
 	configPath := "config/server.json"

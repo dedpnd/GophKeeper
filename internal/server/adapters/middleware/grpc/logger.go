@@ -1,4 +1,4 @@
-// Package interceptor contains gRPC interceptor.
+// Package middleware provides various middlewares for the server.
 package middleware
 
 import (
@@ -8,6 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// InterceptorLogger returns a `logging.Logger` implementation for use
+// with gRPC logging interceptors. It maps the given context, log level,
+// and message to the appropriate logging function in the provided
+// `zap.Logger`, while converting fields from the `logging.Logger` API
+// to `zap.Field` instances.
 func InterceptorLogger(l *zap.Logger) logging.Logger {
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
 		//nolint:gomnd // This legal number

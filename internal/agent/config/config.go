@@ -1,3 +1,4 @@
+// Package config gets settings from environment variables or command line arguments.
 package config
 
 import (
@@ -10,12 +11,14 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// ConfigENV contains app settings.
 type ConfigENV struct {
 	Command    string
 	JWT        string `env:"JWT"`
 	ServerAddr string `json:"server_addr" env:"SERVER_ADDR"`
 }
 
+// GetConfig get app settings.
 func GetConfig() (*ConfigENV, error) {
 	var eCfg ConfigENV
 	configPath := "config/agent.json"

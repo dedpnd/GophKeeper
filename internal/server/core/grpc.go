@@ -1,3 +1,4 @@
+// Package core contains basic app logic.
 package core
 
 import (
@@ -23,6 +24,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// Run run gRPC server.
 func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *repository.DB) error {
 	lg.Info("gRPC server start...", zap.String("address", host))
 
@@ -113,6 +115,7 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 	return nil
 }
 
+// loadTLSCredentials loading cert.
 func loadTLSCredentials() (credentials.TransportCredentials, error) {
 	// Load server's certificate and private key
 	serverCert, err := tls.LoadX509KeyPair("cert/server-cert.pem", "cert/server-key.pem")
