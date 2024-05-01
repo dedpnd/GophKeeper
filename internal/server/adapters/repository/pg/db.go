@@ -22,8 +22,9 @@ type DB struct {
 
 // NewDB initializes a new database session using the given DSN (Data Source Name).
 // It connects to the PostgreSQL database using GORM and configures the logger to operate in silent mode.
-// If the connection is successful, it proceeds to migrate the schema using AutoMigrate for the `User` and `Storage` domain models.
-// If an error occurs during initialization or migration, an error is returned along with a partially initialized `DB` instance.
+// If the connection is successful, it proceeds to migrate the schema using
+// AutoMigrate for the `User` and `Storage` domain models. If an error occurs during
+// initialization or migration, an error is returned along with a partially initialized `DB` instance.
 func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
