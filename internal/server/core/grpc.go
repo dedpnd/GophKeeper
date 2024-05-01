@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Run run gRPC server.
+// RunGRPCserver run gRPC server.
 func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *repository.DB) error {
 	lg.Info("gRPC server start...", zap.String("address", host))
 
