@@ -79,6 +79,7 @@ func (h UserHandler) Login(ctx context.Context, in *proto.LoginRequest) (*proto.
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Hash), []byte(in.Password)); err != nil {
 		res.Error = "login or password incorrect"
+		//nolint:nilerr // This legal return
 		return &res, nil
 	}
 
@@ -86,6 +87,7 @@ func (h UserHandler) Login(ctx context.Context, in *proto.LoginRequest) (*proto.
 	if err != nil {
 		h.Logger.With(zap.Error(err)).Error("failed create jwt token")
 		res.Error = "failed create jwt token"
+
 		return &res, nil
 	}
 

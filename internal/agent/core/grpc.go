@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -18,12 +21,15 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+var defaultPermition fs.FileMode = 0600
 var maxMsgSize = 100000648
+var errorResponseFinished = "response finished error: %w"
+var errorEesponseReturn = "response return error: %w"
 
 func NewClient(lg *zap.Logger, addr string, token string, command string) error {
 	tlsCredentials, err := loadTLSCredentials()
 	if err != nil {
-		return fmt.Errorf("cannot load TLS credentials: %s", err)
+		return fmt.Errorf("cannot load TLS credentials: %w", err)
 	}
 
 	conn, err := grpc.Dial(
@@ -32,7 +38,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 	)
 	if err != nil {
-		return fmt.Errorf("failed start grpc server: %s", err)
+		return fmt.Errorf("failed start grpc server: %w", err)
 	}
 
 	defer func() {
@@ -43,12 +49,13 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 	}()
 
 	switch command {
+	//nolint:dupl // This legal duplicate
 	case "sign-up":
 		fmt.Println("-> Create new account")
 
 		ss, err := getUserCredentials()
 		if err != nil {
-			return fmt.Errorf("failed get user credentials: %s", err)
+			return fmt.Errorf("failed get user credentials: %w", err)
 		}
 
 		client := proto.NewUserClient(conn)
@@ -58,11 +65,11 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 
 		if resp.Error != "" {
-			return fmt.Errorf("response return error: %s", resp.Error)
+			return fmt.Errorf(errorEesponseReturn, resp.Error)
 		}
 
 		fmt.Printf("Token: %s \n", resp.Jwt)
@@ -70,12 +77,13 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		if err != nil {
 			return fmt.Errorf("client failed save token: %w", err)
 		}
+	//nolint:dupl // This legal duplicate
 	case "sign-in":
 		fmt.Println("-> Sign in with your account")
 
 		ss, err := getUserCredentials()
 		if err != nil {
-			return fmt.Errorf("failed get user credentials: %s", err)
+			return fmt.Errorf("failed get user credentials: %w", err)
 		}
 
 		client := proto.NewUserClient(conn)
@@ -85,11 +93,11 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 
 		if resp.Error != "" {
-			return fmt.Errorf("response return error: %s", resp.Error)
+			return fmt.Errorf(errorEesponseReturn, resp.Error)
 		}
 
 		fmt.Printf("Token: %s \n", resp.Jwt)
@@ -107,10 +115,10 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 		if respAR.Error != "" {
-			return fmt.Errorf("response return error: %s", respAR.Error)
+			return fmt.Errorf(errorEesponseReturn, respAR.Error)
 		}
 
 		if len(respAR.Units) == 0 {
@@ -128,7 +136,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 
 		i, err := selectReadFile()
 		if err != nil {
-			return fmt.Errorf("wrong id file: %s", err)
+			return fmt.Errorf("wrong id file: %w", err)
 		}
 
 		respRR, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
@@ -136,13 +144,22 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 		if respRR.Error != "" {
-			return fmt.Errorf("response return error: %s", respRR.Error)
+			return fmt.Errorf(errorEesponseReturn, respRR.Error)
 		}
 
-		fmt.Println(string(respRR.Data))
+		// Type "file"
+		if respRR.Type == "file" {
+			err = saveFileInDisk(respRR.Name, respRR.Data)
+			if err != nil {
+				return fmt.Errorf("save file has error: %w", err)
+			}
+		} else {
+			// Type "text"
+			fmt.Println(string(respRR.Data))
+		}
 	case "write-file":
 		fmt.Println("-> Write file")
 
@@ -153,12 +170,12 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 
 		stream, err := client.WriteRecord(ctx)
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 
 		err = selectWriteData(stream)
 		if err != nil {
-			return fmt.Errorf("select write data error: %s", err)
+			return fmt.Errorf("select write data error: %w", err)
 		}
 	case "delete-file":
 		fmt.Println("-> Delete file")
@@ -170,10 +187,10 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 		if respAR.Error != "" {
-			return fmt.Errorf("response return error: %s", respAR.Error)
+			return fmt.Errorf(errorEesponseReturn, respAR.Error)
 		}
 
 		if len(respAR.Units) == 0 {
@@ -191,7 +208,7 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 
 		i, err := selectReadFile()
 		if err != nil {
-			return fmt.Errorf("wrong id file: %s", err)
+			return fmt.Errorf("wrong id file: %w", err)
 		}
 
 		respDR, err := client.DeleteRecord(ctx, &proto.DeleteRecordRequest{
@@ -199,11 +216,11 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 		})
 
 		if err != nil {
-			return fmt.Errorf("response finished error: %s", err)
+			return fmt.Errorf(errorResponseFinished, err)
 		}
 
 		if respDR.Error != "" {
-			return fmt.Errorf("response return error: %s", respDR.Error)
+			return fmt.Errorf(errorEesponseReturn, respDR.Error)
 		}
 
 		fmt.Println("File delete!")
@@ -219,7 +236,7 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 	// Load certificate of the CA who signed server's certificate
 	pemServerCA, err := os.ReadFile("cert/ca-cert.pem")
 	if err != nil {
-		return nil, fmt.Errorf("failde load file: %s", err)
+		return nil, fmt.Errorf("failde load file: %w", err)
 	}
 
 	certPool := x509.NewCertPool()
@@ -229,13 +246,42 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 
 	// Create the credentials and return it
 	config := &tls.Config{
-		RootCAs: certPool,
+		RootCAs:    certPool,
+		MinVersion: tls.VersionTLS12,
 	}
 
 	return credentials.NewTLS(config), nil
 }
 
 /* !UTILS! */
+var errorFailedReadSTDIN = "failed read stdin: %w"
+
+func saveFileInDisk(fileName string, data []byte) error {
+	fmt.Println("Where do you want to save the file?")
+	fmt.Print("Enter dir path: ")
+
+	// Создайте считыватель для ввода из стандартного ввода (консоли)
+	reader := bufio.NewReader(os.Stdin)
+
+	// Считайте ответ пользователя
+	r, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf(errorFailedReadSTDIN, err)
+	}
+
+	// Обрежьте пробелы и символы новой строки из ответа
+	dirPath := strings.TrimSpace(r)
+	fullPath := filepath.Join(dirPath, fileName)
+
+	err = os.WriteFile(fullPath, data, defaultPermition)
+	if err != nil {
+		return fmt.Errorf("failed write data: %w", err)
+	}
+
+	fmt.Printf("File save in: %s \n", fullPath)
+
+	return nil
+}
 
 func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 	fmt.Println("What you want send on server?")
@@ -249,7 +295,7 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 	// Считайте ответ пользователя
 	r, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("failed read stdin: %w", err)
+		return fmt.Errorf(errorFailedReadSTDIN, err)
 	}
 
 	// Обрежьте пробелы и символы новой строки из ответа
@@ -271,7 +317,7 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 
 		r, err := reader.ReadString('\n')
 		if err != nil {
-			return fmt.Errorf("failed read stdin: %w", err)
+			return fmt.Errorf(errorFailedReadSTDIN, err)
 		}
 
 		r = strings.TrimSpace(r)
@@ -285,7 +331,7 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 
 		fileName, err := reader.ReadString('\n')
 		if err != nil {
-			return fmt.Errorf("failed read stdin: %w", err)
+			return fmt.Errorf(errorFailedReadSTDIN, err)
 		}
 
 		fileName = strings.TrimSpace(fileName)
@@ -293,15 +339,17 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 		switch i {
 		case 1:
 			fmt.Println("Enter text:")
+		//nolint:gomnd // This legal number
 		case 2:
 			fmt.Println("Enter loggin and password:")
+		//nolint:gomnd // This legal number
 		case 3:
 			fmt.Println("Enter number, name, date and CVV:")
 		}
 
 		data, err := reader.ReadString('\n')
 		if err != nil {
-			return fmt.Errorf("failed read stdin: %w", err)
+			return fmt.Errorf(errorFailedReadSTDIN, err)
 		}
 
 		data = strings.TrimSpace(data)
@@ -309,24 +357,25 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 		// Отправьте данные по gRPC
 		err = stream.Send(&proto.WriteRecordRequest{Name: fileName, Data: []byte(data), Type: "text"})
 		if err != nil {
-			return fmt.Errorf("stream send has error: %s", err)
+			return fmt.Errorf("stream send has error: %w", err)
 		}
 
 		// Закройте поток и получите ответ
 		res, err := stream.CloseAndRecv()
 		if err != nil {
-			return fmt.Errorf("closed stream has error: %s", err)
+			return fmt.Errorf("closed stream has error: %w", err)
 		}
 		if res.Error != "" {
-			return fmt.Errorf("response return error: %s", res.Error)
+			return fmt.Errorf(errorEesponseReturn, res.Error)
 		}
+	//nolint:gomnd // This legal number
 	case 2:
 		fmt.Print("Enter the link to the file: ")
 
 		// Считайте ответ пользователя
 		filePath, err := reader.ReadString('\n')
 		if err != nil {
-			return fmt.Errorf("failed read stdin: %w", err)
+			return fmt.Errorf(errorFailedReadSTDIN, err)
 		}
 
 		filePath = strings.TrimSpace(filePath)
@@ -335,7 +384,6 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 		if err != nil {
 			return fmt.Errorf("failed open file: %w", err)
 		}
-		defer file.Close()
 
 		fi, err := file.Stat()
 		if err != nil {
@@ -346,18 +394,22 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 			return fmt.Errorf("maximum file size should be less: %v bytes", maxMsgSize)
 		}
 
+		// Get file name
+		baseName := filepath.Base(file.Name())
+
 		// Прочитать файл кусками и отправить
-		buf := make([]byte, 4096)
+		chunkSize := 4096
+		buf := make([]byte, chunkSize)
 		for {
 			n, err := file.Read(buf)
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				// Конец файла, закройте поток
 				res, err := stream.CloseAndRecv()
 				if err != nil {
 					return fmt.Errorf("failed CloseAndRecv: %w", err)
 				}
 				if res.Error != "" {
-					return fmt.Errorf("response return error: %s", res.Error)
+					return fmt.Errorf(errorEesponseReturn, res.Error)
 				}
 				break
 			}
@@ -366,10 +418,15 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 			}
 
 			// Отправьте кусок данных
-			err = stream.Send(&proto.WriteRecordRequest{Name: file.Name(), Data: buf[:n], Type: "file"})
+			err = stream.Send(&proto.WriteRecordRequest{Name: baseName, Data: buf[:n], Type: "file"})
 			if err != nil {
 				return fmt.Errorf("failed send stream: %w", err)
 			}
+		}
+
+		err = file.Close()
+		if err != nil {
+			return fmt.Errorf("failed close file: %w", err)
 		}
 	}
 
@@ -410,7 +467,7 @@ func saveAuthToken(token string) error {
 	// Считайте ответ пользователя
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("failed read stdin: %w", err)
+		return fmt.Errorf(errorFailedReadSTDIN, err)
 	}
 
 	// Обрежьте пробелы и символы новой строки из ответа
@@ -419,16 +476,20 @@ func saveAuthToken(token string) error {
 	// Проверьте ответ пользователя
 	if strings.ToLower(response) == "y" {
 		// Откройте файл .env в режиме добавления (append) или создания, если его еще нет
-		file, err := os.OpenFile(".env", os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(".env", os.O_CREATE|os.O_WRONLY, defaultPermition)
 		if err != nil {
 			return fmt.Errorf("failed to open .env file: %w", err)
 		}
-		defer file.Close()
 
 		// Запишите строку с токеном в формате "JWT=your_token" в файл
 		_, err = file.WriteString(fmt.Sprintf("JWT=%s\n", token))
 		if err != nil {
 			return fmt.Errorf("failed to write token to .env file: %w", err)
+		}
+
+		err = file.Close()
+		if err != nil {
+			return fmt.Errorf("failed close file: %w", err)
 		}
 
 		fmt.Println("Token saved in .env file.")

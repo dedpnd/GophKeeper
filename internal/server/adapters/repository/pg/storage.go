@@ -24,6 +24,7 @@ func (s *DB) ReadRecord(id int, owner int) (*domain.Storage, error) {
 
 	req := s.db.First(&doc, "id = ? AND owner = ?", id, owner)
 	if req.RowsAffected == 0 {
+		//nolint:nilnil // This legal return
 		return nil, nil
 	}
 

@@ -1,3 +1,4 @@
+//nolint:wrapcheck // This legal return
 package services
 
 import (

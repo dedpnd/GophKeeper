@@ -26,7 +26,10 @@ func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 	}
 
 	// Migrate the schema
-	db.AutoMigrate(&domain.User{}, &domain.Storage{})
+	err = db.AutoMigrate(&domain.User{}, &domain.Storage{})
+	if err != nil {
+		return &DB{}, fmt.Errorf("failed migrate models: %w", err)
+	}
 
 	lg.Info(("Connection to postgre: success"))
 

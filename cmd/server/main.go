@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	buildVersion string = "N/A"
-	buildDate    string = "N/A"
+	minimumCharMasterKey        = 16
+	buildVersion         string = "N/A"
+	buildDate            string = "N/A"
 )
 
 func main() {
@@ -34,8 +35,8 @@ func main() {
 		lg.Fatal("Master key not found! Please use flag -mk")
 	}
 
-	if len(eCfg.MasterKey) < 16 {
-		lg.Fatal("Minimum length master key 16 characters!")
+	if len(eCfg.MasterKey) < minimumCharMasterKey {
+		lg.Sugar().Fatalf("Minimum length master key %v characters!", minimumCharMasterKey)
 	}
 
 	repo, err := repository.NewDB(context.Background(), lg, eCfg.DSN)

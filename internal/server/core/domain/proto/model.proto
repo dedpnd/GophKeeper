@@ -45,8 +45,9 @@ message ReadRecordRequest {
 
 message ReadRecordResponse {
   bytes data = 1;
-  string type = 2;
-  string error = 3;
+  string name = 3;
+  string type = 4;
+  string error = 5;
 }
 
 message ReadAllRecordRequest{

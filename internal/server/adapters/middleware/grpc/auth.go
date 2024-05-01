@@ -23,6 +23,7 @@ func GetAuthenticator(jwtKey string) func(ctx context.Context) (context.Context,
 
 		pl, err := verifyJWTandGetPayload(jwtKey, token)
 		if err != nil {
+			//nolint:wrapcheck // This legal return
 			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 

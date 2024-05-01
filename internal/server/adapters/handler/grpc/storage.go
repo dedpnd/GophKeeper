@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -25,15 +26,18 @@ type StorageHandler struct {
 	MasterKey string
 }
 
-// ReadAllRecord read all record from BD
+var errorInvalidToken = "invalid token"
+var errorCloseStream = "failed close stream: %w"
+
+// ReadAllRecord read all record from BD.
 func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllRecordRequest) (*proto.ReadAllRecordResponse, error) {
 	var resp proto.ReadAllRecordResponse
 
 	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
-		s.Logger.Error("invalid token")
-		resp.Error = "invalid token"
+		s.Logger.Error(errorInvalidToken)
+		resp.Error = errorInvalidToken
 		return &resp, nil
 	}
 
@@ -46,7 +50,7 @@ func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllReco
 	}
 
 	// Preparing response
-	respSlice := make([]*proto.StorageUnit, len(rec))
+	respSlice := make([]*proto.StorageUnit, 0, len(rec))
 	for _, v := range rec {
 		respSlice = append(respSlice, &proto.StorageUnit{
 			Id:    int32(v.ID),
@@ -60,15 +64,15 @@ func (s StorageHandler) ReadAllRecord(ctx context.Context, in *proto.ReadAllReco
 	return &resp, nil
 }
 
-// ReadRecord read single record from BD
+// ReadRecord read single record from BD.
 func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequest) (*proto.ReadRecordResponse, error) {
 	var resp proto.ReadRecordResponse
 
 	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
-		s.Logger.Error("invalid token")
-		resp.Error = "invalid token"
+		s.Logger.Error(errorInvalidToken)
+		resp.Error = errorInvalidToken
 		return &resp, nil
 	}
 
@@ -93,12 +97,14 @@ func (s StorageHandler) ReadRecord(ctx context.Context, in *proto.ReadRecordRequ
 		return &resp, nil
 	}
 
+	resp.Name = rec.Name
+	resp.Type = rec.Type
 	resp.Data = data
 
 	return &resp, nil
 }
 
-// WriteRecord write record in BD
+// WriteRecord write record in BD.
 func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) error {
 	var resp proto.WriteRecordResponse
 	var fileName string
@@ -110,20 +116,28 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 	// Get token from context
 	token, ok := middleware.GetTokenFromContext(stream.Context())
 	if !ok {
-		s.Logger.Error("invalid token")
-		resp.Error = "invalid token"
-		return stream.SendAndClose(&resp)
+		s.Logger.Error(errorInvalidToken)
+		resp.Error = errorInvalidToken
+
+		err := stream.SendAndClose(&resp)
+		if err != nil {
+			return fmt.Errorf(errorCloseStream, err)
+		}
 	}
 
 	for {
 		chunk, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			s.Logger.With(zap.Error(err)).Error("failed recive chunk")
 			resp.Error = "failed recive chunk"
-			return stream.SendAndClose(&resp)
+
+			err := stream.SendAndClose(&resp)
+			if err != nil {
+				return fmt.Errorf(errorCloseStream, err)
+			}
 		}
 
 		// Saving the file name from the request
@@ -139,7 +153,11 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 		if _, err := buffer.Write(chunk.GetData()); err != nil {
 			s.Logger.With(zap.Error(err)).Error("failed write chunk to buffer")
 			resp.Error = "failed write chunk to buffer"
-			return stream.SendAndClose(&resp)
+
+			err := stream.SendAndClose(&resp)
+			if err != nil {
+				return fmt.Errorf(errorCloseStream, err)
+			}
 		}
 	}
 
@@ -148,7 +166,11 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 	if err != nil {
 		s.Logger.With(zap.Error(err)).Error("failed encrypt data")
 		resp.Error = "failed encrypt data"
-		return stream.SendAndClose(&resp)
+
+		err := stream.SendAndClose(&resp)
+		if err != nil {
+			return fmt.Errorf(errorCloseStream, err)
+		}
 	}
 
 	// Prepare record for save
@@ -165,22 +187,31 @@ func (s StorageHandler) WriteRecord(stream proto.Storage_WriteRecordServer) erro
 	if err != nil {
 		s.Logger.With(zap.Error(err)).Error("failed write record")
 		resp.Error = "failed write record"
-		return stream.SendAndClose(&resp)
+
+		err := stream.SendAndClose(&resp)
+		if err != nil {
+			return fmt.Errorf(errorCloseStream, err)
+		}
 	}
 
 	// Close stream
-	return stream.SendAndClose(&resp)
+	err = stream.SendAndClose(&resp)
+	if err != nil {
+		return fmt.Errorf(errorCloseStream, err)
+	}
+
+	return nil
 }
 
-// DeleteRecord delete record from BD
+// DeleteRecord delete record from BD.
 func (s StorageHandler) DeleteRecord(ctx context.Context, in *proto.DeleteRecordRequest) (*proto.DeleteRecordResponse, error) {
 	var resp proto.DeleteRecordResponse
 
 	// Get token from context
 	token, ok := middleware.GetTokenFromContext(ctx)
 	if !ok {
-		s.Logger.Error("invalid token")
-		resp.Error = "invalid token"
+		s.Logger.Error(errorInvalidToken)
+		resp.Error = errorInvalidToken
 		return &resp, nil
 	}
 
@@ -195,10 +226,12 @@ func (s StorageHandler) DeleteRecord(ctx context.Context, in *proto.DeleteRecord
 	return &resp, nil
 }
 
-/* UTILS */
+/* UTILS. */
+
+var sizeRandomKey = 16
 
 func encryptionData(mk string, data []byte) (string, string, error) {
-	key, err := generateRandom(16)
+	key, err := generateRandom(sizeRandomKey)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
@@ -222,7 +255,7 @@ func decryptionData(mk string, key string, data string) ([]byte, error) {
 		return []byte{}, fmt.Errorf("failed decrypt key: %w", err)
 	}
 
-	decData, err := decrypt([]byte(decKey), data)
+	decData, err := decrypt(decKey, data)
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed decrypt data: %w", err)
 	}
@@ -232,7 +265,7 @@ func decryptionData(mk string, key string, data string) ([]byte, error) {
 
 func encrypt(key []byte, plaintext []byte) (string, error) {
 	// Преобразуйте ключ в байты нужной длины
-	keyBytes := adjustKeySize(key, 16)
+	keyBytes := adjustKeySize(key, sizeRandomKey)
 	// Создайте новый блок AES с использованием ключа
 	block, err := aes.NewCipher(keyBytes)
 	if err != nil {
@@ -275,7 +308,7 @@ func decrypt(key []byte, plaintext string) ([]byte, error) {
 	}
 
 	// Преобразуйте ключ в байты нужной длины
-	keyBytes := adjustKeySize([]byte(key), 16)
+	keyBytes := adjustKeySize(key, sizeRandomKey)
 	block, err := aes.NewCipher(keyBytes)
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to create AES cipher: %w", err)
