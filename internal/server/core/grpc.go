@@ -25,11 +25,19 @@ import (
 )
 
 // RunGRPCserver run gRPC server.
-func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *repository.DB) error {
+func RunGRPCserver(
+	lg *zap.Logger,
+	host string,
+	pathCert string,
+	pathKey string,
+	jwtKey string,
+	mk string,
+	repo *repository.DB,
+) error {
 	lg.Info("gRPC server start...", zap.String("address", host))
 
 	// Load certificates
-	tlsCredentials, err := loadTLSCredentials()
+	tlsCredentials, err := loadTLSCredentials(pathCert, pathKey)
 	if err != nil {
 		return fmt.Errorf("failed load tls: %w", err)
 	}
@@ -88,6 +96,10 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 
 	go func() {
 		defer func() {
+			if err := repo.Close(); err != nil {
+				lg.Info(err.Error())
+			}
+
 			stop()
 			wg.Done()
 		}()
@@ -116,9 +128,9 @@ func RunGRPCserver(lg *zap.Logger, host string, jwtKey string, mk string, repo *
 }
 
 // loadTLSCredentials loading cert.
-func loadTLSCredentials() (credentials.TransportCredentials, error) {
+func loadTLSCredentials(cert string, key string) (credentials.TransportCredentials, error) {
 	// Load server's certificate and private key
-	serverCert, err := tls.LoadX509KeyPair("cert/server-cert.pem", "cert/server-key.pem")
+	serverCert, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		return nil, fmt.Errorf("failde load file: %w", err)
 	}

@@ -47,3 +47,18 @@ func NewDB(ctx context.Context, lg *zap.Logger, dsn string) (*DB, error) {
 		db: db,
 	}, nil
 }
+
+// Close close database connection.
+func (s DB) Close() error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return fmt.Errorf("failed get sql db: %w", err)
+	}
+
+	err = sqlDB.Close()
+	if err != nil {
+		return fmt.Errorf("failed close db: %w", err)
+	}
+
+	return nil
+}
