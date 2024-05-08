@@ -28,9 +28,9 @@ var errorResponseFinished = "response finished error: %w"
 var errorEesponseReturn = "response return error: %w"
 
 // NewClient initializes gRPC client.
-func NewClient(lg *zap.Logger, addr string, token string, command string) error {
+func NewClient(lg *zap.Logger, addr string, certPath string, token string, command string) error {
 	// Get TLS cert
-	tlsCredentials, err := loadTLSCredentials()
+	tlsCredentials, err := loadTLSCredentials(certPath)
 	if err != nil {
 		return fmt.Errorf("cannot load TLS credentials: %w", err)
 	}
@@ -257,9 +257,9 @@ func NewClient(lg *zap.Logger, addr string, token string, command string) error 
 }
 
 // loadTLSCredentials loading certificates.
-func loadTLSCredentials() (credentials.TransportCredentials, error) {
+func loadTLSCredentials(cert string) (credentials.TransportCredentials, error) {
 	// Load certificate of the CA who signed server's certificate
-	pemServerCA, err := os.ReadFile("cert/ca-cert.pem")
+	pemServerCA, err := os.ReadFile(cert)
 	if err != nil {
 		return nil, fmt.Errorf("failde load file: %w", err)
 	}

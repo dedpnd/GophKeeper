@@ -44,10 +44,7 @@ func main() {
 		lg.Fatal(err.Error())
 	}
 
-	defaultPathCert := "cert/server-cert.pem"
-	defaultPathKey := "cert/server-key.pem"
-
-	err = core.RunGRPCserver(lg, eCfg.Host, defaultPathCert, defaultPathKey, eCfg.JWTkey, eCfg.MasterKey, repo)
+	err = core.RunGRPCserver(lg, eCfg.Host, eCfg.CertificatePath, eCfg.CertificateKeyPath, eCfg.JWTkey, eCfg.MasterKey, repo)
 	if err != nil {
 		lg.Fatal(err.Error())
 	}

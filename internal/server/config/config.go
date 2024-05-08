@@ -12,10 +12,12 @@ import (
 
 // ConfigENV contains app settings.
 type ConfigENV struct {
-	JWTkey    string `json:"jwt_key" env:"JWT_KEY"`
-	Host      string `json:"host" env:"HOST"`
-	DSN       string `json:"dsn" env:"DSN"`
-	MasterKey string
+	JWTkey             string `json:"jwt_key" env:"JWT_KEY"`
+	Host               string `json:"host" env:"HOST"`
+	DSN                string `json:"dsn" env:"DSN"`
+	CertificatePath    string `json:"certificate"`
+	CertificateKeyPath string `json:"certificate_key"`
+	MasterKey          string
 }
 
 // GetConfig get app settings.

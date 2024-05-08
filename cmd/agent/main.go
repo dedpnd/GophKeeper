@@ -41,7 +41,7 @@ func main() {
 		fmt.Println("*************************************")
 	}
 
-	err = core.NewClient(lg, eCfg.ServerAddr, eCfg.JWT, eCfg.Command)
+	err = core.NewClient(lg, eCfg.ServerAddr, eCfg.JWT, eCfg.Certificate, eCfg.Command)
 	if err != nil {
 		lg.Sugar().Fatalf("grpc client: %s", err.Error())
 	}

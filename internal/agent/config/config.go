@@ -13,9 +13,10 @@ import (
 
 // ConfigENV contains app settings.
 type ConfigENV struct {
-	Command    string
-	JWT        string `env:"JWT"`
-	ServerAddr string `json:"server_addr" env:"SERVER_ADDR"`
+	Command     string
+	JWT         string `env:"JWT"`
+	ServerAddr  string `json:"server_addr" env:"SERVER_ADDR"`
+	Certificate string `json:"certificate"`
 }
 
 // GetConfig get app settings.
