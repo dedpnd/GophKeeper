@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 
 	env "github.com/caarlos0/env/v6"
 	"github.com/joho/godotenv"
 )
+
+var defaultPermition fs.FileMode = 0600
 
 // ConfigENV contains app settings.
 type ConfigENV struct {
@@ -39,6 +42,16 @@ func GetConfig() (*ConfigENV, error) {
 
 	if err := file.Close(); err != nil {
 		return nil, fmt.Errorf("failed close config file: %w", err)
+	}
+
+	// Create .env file if not exist
+	file, err = os.OpenFile(".env", os.O_CREATE, defaultPermition)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create .env file: %w", err)
+	}
+	err = file.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close .env file: %w", err)
 	}
 
 	err = godotenv.Load(".env")

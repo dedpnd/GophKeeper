@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/dedpnd/GophKeeper/internal/agent/client"
 	"github.com/dedpnd/GophKeeper/internal/agent/config"
 	"github.com/dedpnd/GophKeeper/internal/agent/core"
 	"github.com/dedpnd/GophKeeper/internal/logger"
@@ -41,8 +42,18 @@ func main() {
 		fmt.Println("*************************************")
 	}
 
-	err = core.NewClient(lg, eCfg.ServerAddr, eCfg.JWT, eCfg.Certificate, eCfg.Command)
+	cl, err := client.NewClient(eCfg.ServerAddr, eCfg.Certificate, eCfg.JWT)
 	if err != nil {
-		lg.Sugar().Fatalf("grpc client: %s", err.Error())
+		lg.Sugar().Fatalf("failed create client: %s", err.Error())
+	}
+
+	err = core.Run(cl, eCfg.Command)
+	if err != nil {
+		lg.Sugar().Fatalf("failed command from client: %s", err.Error())
+	}
+
+	err = cl.Close()
+	if err != nil {
+		lg.Sugar().Fatalf("failed close client: %s", err.Error())
 	}
 }

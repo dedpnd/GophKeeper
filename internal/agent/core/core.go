@@ -1,61 +1,23 @@
-// Package core contains the basic logic of the application.
 package core
 
 import (
 	"bufio"
-	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/dedpnd/GophKeeper/internal/server/core/domain/proto"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
+	"github.com/dedpnd/GophKeeper/internal/agent/client"
 )
 
-var maxMsgSize = 100000648
 var defaultPermition fs.FileMode = 0600
-var errorResponseFinished = "response finished error: %w"
-var errorEesponseReturn = "response return error: %w"
+var errorFailedReadSTDIN = "failed read stdin: %w"
 
-// NewClient initializes gRPC client.
-func NewClient(lg *zap.Logger, addr string, certPath string, token string, command string) error {
-	// Get TLS cert
-	tlsCredentials, err := loadTLSCredentials(certPath)
-	if err != nil {
-		return fmt.Errorf("cannot load TLS credentials: %w", err)
-	}
-
-	// Connect to gRPC server
-	conn, err := grpc.Dial(
-		addr,
-		grpc.WithTransportCredentials(tlsCredentials),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
-	)
-	if err != nil {
-		return fmt.Errorf("failed start grpc server: %w", err)
-	}
-
-	// Close gRPC connection
-	defer func() {
-		err := conn.Close()
-		if err != nil {
-			lg.With(zap.Error(err)).Error("failed close gRPC client")
-		}
-	}()
-
+func Run(client *client.Client, command string) error {
 	// Depending on the command, we choose the logic of behavior
 	switch command {
-	//nolint:dupl // This legal duplicate
 	case "sign-up":
 		fmt.Println("-> Create new account")
 
@@ -65,29 +27,18 @@ func NewClient(lg *zap.Logger, addr string, certPath string, token string, comma
 			return fmt.Errorf("failed get user credentials: %w", err)
 		}
 
-		// Create client
-		client := proto.NewUserClient(conn)
-		resp, err := client.Register(context.Background(), &proto.RegiserRequest{
-			Login:    ss.login,
-			Password: ss.password,
-		})
-
+		r, err := client.Register(ss.login, ss.password)
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
+			return fmt.Errorf("failed register user: %w", err)
 		}
 
-		if resp.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, resp.Error)
-		}
-
-		fmt.Printf("Token: %s \n", resp.Jwt)
+		fmt.Printf("Token: %s \n", r.Jwt)
 
 		// Do you want to save the token?
-		err = saveAuthToken(resp.Jwt)
+		err = saveAuthToken(r.Jwt)
 		if err != nil {
 			return fmt.Errorf("client failed save token: %w", err)
 		}
-	//nolint:dupl // This legal duplicate
 	case "sign-in":
 		fmt.Println("-> Sign in with your account")
 
@@ -96,52 +47,34 @@ func NewClient(lg *zap.Logger, addr string, certPath string, token string, comma
 			return fmt.Errorf("failed get user credentials: %w", err)
 		}
 
-		client := proto.NewUserClient(conn)
-		resp, err := client.Login(context.Background(), &proto.LoginRequest{
-			Login:    ss.login,
-			Password: ss.password,
-		})
-
+		r, err := client.Login(ss.login, ss.password)
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
+			return fmt.Errorf("failed login user: %w", err)
 		}
 
-		if resp.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, resp.Error)
-		}
-
-		fmt.Printf("Token: %s \n", resp.Jwt)
-		err = saveAuthToken(resp.Jwt)
+		fmt.Printf("Token: %s \n", r.Jwt)
+		err = saveAuthToken(r.Jwt)
 		if err != nil {
 			return fmt.Errorf("client failed save token: %w", err)
 		}
 	case "read-file":
 		fmt.Println("-> Read file")
 
-		// Set authorization in gRPC metadata
-		md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", token))
-		ctx := metadata.NewOutgoingContext(context.Background(), md)
-
-		// Create client
-		client := proto.NewStorageClient(conn)
-		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
-
+		// Request to read all file
+		rAllFile, err := client.ReadAllFile()
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
-		}
-		if respAR.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, respAR.Error)
+			return fmt.Errorf("failed get all file: %w", err)
 		}
 
 		// If there are no files, exit
-		if len(respAR.Units) == 0 {
+		if len(rAllFile.Units) == 0 {
 			fmt.Println("Not found files. Bye!")
 			return nil
 		}
 
 		// Showing the available files
 		fmt.Println("Available files:")
-		for _, v := range respAR.Units {
+		for _, v := range rAllFile.Units {
 			// TODO: Откуда 0 ? Size slice ?
 			if v.Id > 0 {
 				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
@@ -155,73 +88,47 @@ func NewClient(lg *zap.Logger, addr string, certPath string, token string, comma
 		}
 
 		// Request to read the file
-		respRR, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
-			Id: int32(i),
-		})
-
+		rFile, err := client.ReadFile(int32(i))
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
-		}
-		if respRR.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, respRR.Error)
+			return fmt.Errorf("failed get all file: %w", err)
 		}
 
 		// If the file type is file
-		if respRR.Type == "file" {
-			err = saveFileInDisk(respRR.Name, respRR.Data)
+		if rFile.Type == "file" {
+			err = saveFileInDisk(rFile.Name, rFile.Data)
 			if err != nil {
 				return fmt.Errorf("save file has error: %w", err)
 			}
 		} else {
 			// Else type is text
-			fmt.Println(string(respRR.Data))
+			fmt.Println(string(rFile.Data))
 		}
 	case "write-file":
 		fmt.Println("-> Write file")
 
-		// Set authorization in gRPC metadata
-		md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", token))
-		ctx := metadata.NewOutgoingContext(context.Background(), md)
-
-		// Create client
-		client := proto.NewStorageClient(conn)
-		stream, err := client.WriteRecord(ctx)
-		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
-		}
-
 		// Selecting the file type and the file we want to save
-		err = selectWriteData(stream)
+		err := selectWriteData(client)
 		if err != nil {
-			return fmt.Errorf("select write data error: %w", err)
+			return fmt.Errorf("select write data has error: %w", err)
 		}
 	case "delete-file":
 		fmt.Println("-> Delete file")
 
-		// Set authorization in gRPC metadata
-		md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", token))
-		ctx := metadata.NewOutgoingContext(context.Background(), md)
-
-		// Create client
-		client := proto.NewStorageClient(conn)
-		respAR, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
-
+		// Request to read all file
+		rAllFile, err := client.ReadAllFile()
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
-		}
-		if respAR.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, respAR.Error)
+			return fmt.Errorf("failed get all file: %w", err)
 		}
 
 		// If there are no files, exit
-		if len(respAR.Units) == 0 {
+		if len(rAllFile.Units) == 0 {
 			fmt.Println("Not found files. Bye!")
 			return nil
 		}
 
 		// Showing the available files
 		fmt.Println("Available files:")
-		for _, v := range respAR.Units {
+		for _, v := range rAllFile.Units {
 			// TODO: Откуда 0 ? Size slice ?
 			if v.Id > 0 {
 				fmt.Printf("[%v] - %s \n", v.Id, v.Name)
@@ -234,17 +141,10 @@ func NewClient(lg *zap.Logger, addr string, certPath string, token string, comma
 			return fmt.Errorf("wrong id file: %w", err)
 		}
 
-		// Request for deletion
-		respDR, err := client.DeleteRecord(ctx, &proto.DeleteRecordRequest{
-			Id: int32(i),
-		})
-
+		// Request for delete
+		_, err = client.DeleteFile(int32(i))
 		if err != nil {
-			return fmt.Errorf(errorResponseFinished, err)
-		}
-
-		if respDR.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, respDR.Error)
+			return fmt.Errorf("failed delete file: %w", err)
 		}
 
 		fmt.Println("File delete!")
@@ -256,30 +156,7 @@ func NewClient(lg *zap.Logger, addr string, certPath string, token string, comma
 	return nil
 }
 
-// loadTLSCredentials loading certificates.
-func loadTLSCredentials(cert string) (credentials.TransportCredentials, error) {
-	// Load certificate of the CA who signed server's certificate
-	pemServerCA, err := os.ReadFile(cert)
-	if err != nil {
-		return nil, fmt.Errorf("failde load file: %w", err)
-	}
-
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemServerCA) {
-		return nil, fmt.Errorf("failed to add server CA's certificate")
-	}
-
-	// Create the credentials and return it
-	config := &tls.Config{
-		RootCAs:    certPool,
-		MinVersion: tls.VersionTLS12,
-	}
-
-	return credentials.NewTLS(config), nil
-}
-
-/* !UTILS! */
-var errorFailedReadSTDIN = "failed read stdin: %w"
+// UTILS FOR WRITE FILE.
 
 // saveFileInDisk saving files to disk.
 func saveFileInDisk(fileName string, data []byte) error {
@@ -310,7 +187,7 @@ func saveFileInDisk(fileName string, data []byte) error {
 }
 
 // selectWriteData selecting a file to download.
-func selectWriteData(stream proto.Storage_WriteRecordClient) error {
+func selectWriteData(client *client.Client) error {
 	fmt.Println("What you want send on server?")
 	fmt.Println("[1] - Text")
 	fmt.Println("[2] - File")
@@ -381,19 +258,11 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 		data = strings.TrimSpace(data)
 
 		// Send the gRPC data
-		err = stream.Send(&proto.WriteRecordRequest{Name: fileName, Data: []byte(data), Type: "text"})
+		_, err = client.WriteFile("text", fileName, data)
 		if err != nil {
-			return fmt.Errorf("stream send has error: %w", err)
+			return fmt.Errorf("write file has error: %w", err)
 		}
 
-		// Close the stream and get a response
-		res, err := stream.CloseAndRecv()
-		if err != nil {
-			return fmt.Errorf("closed stream has error: %w", err)
-		}
-		if res.Error != "" {
-			return fmt.Errorf(errorEesponseReturn, res.Error)
-		}
 	//nolint:gomnd // This legal number
 	case 2:
 		fmt.Print("Enter the link to the file: ")
@@ -406,53 +275,13 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 
 		filePath = strings.TrimSpace(filePath)
 
-		file, err := os.Open(filePath)
-		if err != nil {
-			return fmt.Errorf("failed open file: %w", err)
-		}
-
-		fi, err := file.Stat()
-		if err != nil {
-			return fmt.Errorf("failed read stat file: %w", err)
-		}
-
-		if fi.Size() > int64(maxMsgSize) {
-			return fmt.Errorf("maximum file size should be less: %v bytes", maxMsgSize)
-		}
-
 		// Get file name
-		baseName := filepath.Base(file.Name())
+		baseName := filepath.Base(filePath)
 
-		// Read the file in chunks and send
-		chunkSize := 4096
-		buf := make([]byte, chunkSize)
-		for {
-			n, err := file.Read(buf)
-			if errors.Is(err, io.EOF) {
-				// End of file, close the stream
-				res, err := stream.CloseAndRecv()
-				if err != nil {
-					return fmt.Errorf("failed CloseAndRecv: %w", err)
-				}
-				if res.Error != "" {
-					return fmt.Errorf(errorEesponseReturn, res.Error)
-				}
-				break
-			}
-			if err != nil {
-				return fmt.Errorf("failed read file: %w", err)
-			}
-
-			// Send a piece of data
-			err = stream.Send(&proto.WriteRecordRequest{Name: baseName, Data: buf[:n], Type: "file"})
-			if err != nil {
-				return fmt.Errorf("failed send stream: %w", err)
-			}
-		}
-
-		err = file.Close()
+		// Send the gRPC data
+		_, err = client.WriteFile("file", baseName, filePath)
 		if err != nil {
-			return fmt.Errorf("failed close file: %w", err)
+			return fmt.Errorf("write file has error: %w", err)
 		}
 	}
 
@@ -460,6 +289,8 @@ func selectWriteData(stream proto.Storage_WriteRecordClient) error {
 
 	return nil
 }
+
+// UTILS FOR READ FILE.
 
 // selectReadFile select a file to read.
 func selectReadFile() (int, error) {
@@ -486,6 +317,8 @@ func selectReadFile() (int, error) {
 	return i, nil
 }
 
+// UTILS FOR REGISTER AND LOGIN.
+
 // saveAuthToken saving the token to the .env file.
 func saveAuthToken(token string) error {
 	fmt.Print("Do you want save token in .env? [y/N]: ")
@@ -505,7 +338,7 @@ func saveAuthToken(token string) error {
 	// Check the user's response
 	if strings.ToLower(response) == "y" {
 		// Open the file .env in append or create mode, if it doesn't exist yet
-		file, err := os.OpenFile(".env", os.O_CREATE|os.O_WRONLY, defaultPermition)
+		file, err := os.OpenFile(".env", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultPermition)
 		if err != nil {
 			return fmt.Errorf("failed to open .env file: %w", err)
 		}
