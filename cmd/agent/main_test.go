@@ -1,4 +1,3 @@
-//nolint:all // This legal
 package main
 
 import (
@@ -36,9 +35,6 @@ var databaseURL string
 var testJWTkey = "12345"
 var testMasterKey = "1234567812345678"
 var testMaxMsgSize = 100000648
-
-// var testUser = "test"
-// var testUserID = 1
 
 func TestMain(m *testing.M) {
 	// uses a sensible default on windows (tcp/http) and linux/osx (socket)
