@@ -20,8 +20,8 @@ var errorResponseFinished = "response finished error: %w"
 var errorEesponseReturn = "response return error: %w"
 
 type Client struct {
-	token string
-	conn  *grpc.ClientConn
+	Conn  *grpc.ClientConn
+	Token string
 }
 
 func NewClient(addr string, certPath string, token string) (*Client, error) {
@@ -42,13 +42,13 @@ func NewClient(addr string, certPath string, token string) (*Client, error) {
 	}
 
 	return &Client{
-		conn:  conn,
-		token: token,
+		Conn:  conn,
+		Token: token,
 	}, nil
 }
 
 func (c Client) Close() error {
-	err := c.conn.Close()
+	err := c.Conn.Close()
 	if err != nil {
 		return fmt.Errorf("failed close gRPC client: %w", err)
 	}
@@ -58,7 +58,7 @@ func (c Client) Close() error {
 
 func (c Client) Register(login string, password string) (*proto.RegisterResponse, error) {
 	// Create client
-	client := proto.NewUserClient(c.conn)
+	client := proto.NewUserClient(c.Conn)
 	resp, err := client.Register(context.Background(), &proto.RegiserRequest{
 		Login:    login,
 		Password: password,
@@ -77,7 +77,7 @@ func (c Client) Register(login string, password string) (*proto.RegisterResponse
 
 func (c Client) Login(login string, password string) (*proto.LoginResponse, error) {
 	// Create client
-	client := proto.NewUserClient(c.conn)
+	client := proto.NewUserClient(c.Conn)
 	resp, err := client.Login(context.Background(), &proto.LoginRequest{
 		Login:    login,
 		Password: password,
@@ -96,11 +96,11 @@ func (c Client) Login(login string, password string) (*proto.LoginResponse, erro
 
 func (c Client) ReadAllFile() (*proto.ReadAllRecordResponse, error) {
 	// Set authorization in gRPC metadata
-	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.token))
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create client
-	client := proto.NewStorageClient(c.conn)
+	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.ReadAllRecord(ctx, &proto.ReadAllRecordRequest{})
 
 	if err != nil {
@@ -116,11 +116,11 @@ func (c Client) ReadAllFile() (*proto.ReadAllRecordResponse, error) {
 //nolint:dupl // This legal duplicate
 func (c Client) ReadFile(id int32) (*proto.ReadRecordResponse, error) {
 	// Set authorization in gRPC metadata
-	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.token))
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create client
-	client := proto.NewStorageClient(c.conn)
+	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.ReadRecord(ctx, &proto.ReadRecordRequest{
 		Id: id,
 	})
@@ -137,11 +137,11 @@ func (c Client) ReadFile(id int32) (*proto.ReadRecordResponse, error) {
 
 func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRecordResponse, error) {
 	// Set authorization in gRPC metadata
-	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.token))
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create client
-	client := proto.NewStorageClient(c.conn)
+	client := proto.NewStorageClient(c.Conn)
 	stream, err := client.WriteRecord(ctx)
 	if err != nil {
 		return nil, fmt.Errorf(errorResponseFinished, err)
@@ -218,11 +218,11 @@ func (c Client) WriteFile(typ string, name string, data string) (*proto.WriteRec
 //nolint:dupl // This legal duplicate
 func (c Client) DeleteFile(id int32) (*proto.DeleteRecordResponse, error) {
 	// Set authorization in gRPC metadata
-	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.token))
+	md := metadata.Pairs("authorization", fmt.Sprintf("bearer %s", c.Token))
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create client
-	client := proto.NewStorageClient(c.conn)
+	client := proto.NewStorageClient(c.Conn)
 	resp, err := client.DeleteRecord(ctx, &proto.DeleteRecordRequest{
 		Id: id,
 	})
